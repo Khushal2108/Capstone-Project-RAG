@@ -12,7 +12,7 @@ class VectorStore:
     
     def __init__(self):
         print("📄 Loading CLIP embedding model...")
-        self.embedding_model = SentenceTransformer(Config.CLIP_MODEL)
+        self.embedding_model = SentenceTransformer(Config.EMBEDDING_MODEL)
         print("✅ CLIP model loaded successfully")
         
         self.client = chromadb.PersistentClient(
