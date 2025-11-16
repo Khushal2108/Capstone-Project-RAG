@@ -1,6 +1,6 @@
 """
 Standalone document ingestion script
-Run this script to process and ingest documents without starting the Streamlit UI
+Run this BEFORE starting Streamlit for faster startup
 """
 
 import os
@@ -14,7 +14,7 @@ from vector_store import VectorStore
 def print_banner():
     """Print application banner"""
     print("\n" + "="*70)
-    print("🤖 BYTE SIZE - Multimodal RAG Document Ingestion")
+    print("🤖 BYTE SIZE - Document Ingestion")
     print("="*70 + "\n")
 
 def check_data_directory():
@@ -29,7 +29,6 @@ def check_data_directory():
         print(f"\n📝 Please add PDF, DOC, or DOCX files to this directory and run again.")
         return False
     
-    # Check for supported files
     doc_files = (
         list(data_dir.glob("*.pdf")) + 
         list(data_dir.glob("*.docx")) + 
@@ -43,7 +42,7 @@ def check_data_directory():
     
     print(f"✅ Found {len(doc_files)} document(s) in '{Config.DATA_DIR}':")
     for doc in doc_files:
-        file_size = doc.stat().st_size / 1024  # KB
+        file_size = doc.stat().st_size / 1024
         print(f"   • {doc.name} ({file_size:.1f} KB)")
     print()
     
@@ -124,13 +123,11 @@ def store_embeddings(vector_store, text_chunks, image_data):
     print("="*70 + "\n")
     
     try:
-        # Store text chunks
         if text_chunks:
             print("📝 Storing text embeddings...")
             vector_store.add_text_chunks(text_chunks)
             print()
         
-        # Store image descriptions
         if image_data:
             print("🖼️ Storing image description embeddings...")
             vector_store.add_image_descriptions(image_data)
@@ -158,11 +155,9 @@ def display_statistics(vector_store):
     print(f"   • Image descriptions: {stats['image_descriptions']}")
     print(f"   • Total embeddings: {stats['total']}")
     print(f"\n💾 Storage location: {Config.CHROMA_DB_DIR}")
-    print(f"   • Text collection: {Config.TEXT_COLLECTION}")
-    print(f"   • Image collection: {Config.IMAGE_COLLECTION}")
     
     print("\n" + "="*70)
-    print("✅ Ingestion Complete! You can now start the Streamlit app.")
+    print("✅ INGESTION COMPLETE!")
     print("="*70 + "\n")
 
 def clear_database(vector_store):
@@ -231,11 +226,12 @@ def main():
     # Final instructions
     print("🚀 Next Steps:")
     print("   1. Run: streamlit run app.py")
-    print("   2. The chatbot will be ready to answer questions!")
+    print("   2. OR Run: python auto_ingest_and_run.py (automated)")
+    print("   3. System will auto-load your data!")
     print("\n💡 Tips:")
-    print("   • Ask about specific charts, diagrams, or tables")
-    print("   • Request summaries or comparisons")
-    print("   • Query across multiple documents")
+    print("   • Upload images in chat for analysis")
+    print("   • Ask about charts, diagrams, or any visuals")
+    print("   • LangGraph workflow is active!")
     print()
 
 if __name__ == "__main__":
