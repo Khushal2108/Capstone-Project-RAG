@@ -36,19 +36,19 @@ Question: {question}
 Answer:""")
         ])
         
-        # Prompt for queries with uploaded images
+        # Enhanced prompt for queries with uploaded images
         self.image_prompt = ChatPromptTemplate.from_messages([
-            ("human", """You are an intelligent assistant analyzing documents and images together.
-The user has uploaded an image and is asking a question about it in the context of the provided documents.
+            ("human", """You are an intelligent assistant analyzing an uploaded image along with document knowledge.
 
-Guidelines:
-1. Analyze both the uploaded image description and the document context
-2. Explain how the uploaded image relates to the documents
-3. Answer the user's specific question about the image
-4. If the image appears in the documents, reference that connection
-5. Be specific and detailed in your analysis
+The user has uploaded an image and wants to understand it. Even if the exact image is not in the documents, use your knowledge to:
+1. Analyze and describe the uploaded image in detail
+2. Compare it with similar content from the documents if available
+3. Provide insights based on the image content
+4. Connect it to relevant document information when possible
 
-Document Context:
+IMPORTANT: Always provide a detailed analysis of the uploaded image, even if it's not directly in the documents.
+
+Document Context (for reference):
 {context}
 
 Uploaded Image Analysis:
@@ -56,7 +56,7 @@ Uploaded Image Analysis:
 
 User Question: {question}
 
-Answer:""")
+Provide a comprehensive answer about the uploaded image:""")
         ])
     
     def _initialize_llm(self):
@@ -79,26 +79,28 @@ Answer:""")
         """Format retrieved documents into context string"""
         context_parts = []
         
-        if query_results['text_results'].get('documents'):
+        if query_results.get('text_results', {}).get('documents'):
             context_parts.append("=== TEXT CONTENT ===")
-            for idx, (doc, metadata) in enumerate(zip(
-                query_results['text_results']['documents'][0],
-                query_results['text_results']['metadatas'][0]
-            )):
-                source = metadata.get('source', 'Unknown')
-                context_parts.append(f"\n[Source: {source}]\n{doc}\n")
+            docs = query_results['text_results'].get('documents', [[]])
+            metas = query_results['text_results'].get('metadatas', [[]])
+            
+            if docs and docs[0]:
+                for idx, (doc, metadata) in enumerate(zip(docs[0], metas[0])):
+                    source = metadata.get('source', 'Unknown')
+                    context_parts.append(f"\n[Source: {source}]\n{doc}\n")
         
-        if query_results['image_results'].get('documents'):
+        if query_results.get('image_results', {}).get('documents'):
             context_parts.append("\n=== VISUAL CONTENT (Charts, Diagrams, Tables) ===")
-            for idx, (doc, metadata) in enumerate(zip(
-                query_results['image_results']['documents'][0],
-                query_results['image_results']['metadatas'][0]
-            )):
-                source = metadata.get('source', 'Unknown')
-                page = metadata.get('page', 'Unknown')
-                context_parts.append(f"\n[Visual from {source}, Page {page}]\n{doc}\n")
+            docs = query_results['image_results'].get('documents', [[]])
+            metas = query_results['image_results'].get('metadatas', [[]])
+            
+            if docs and docs[0]:
+                for idx, (doc, metadata) in enumerate(zip(docs[0], metas[0])):
+                    source = metadata.get('source', 'Unknown')
+                    page = metadata.get('page', 'Unknown')
+                    context_parts.append(f"\n[Visual from {source}, Page {page}]\n{doc}\n")
         
-        return "\n".join(context_parts)
+        return "\n".join(context_parts) if context_parts else "No specific document context available."
     
     def generate_response(
         self, 
@@ -113,21 +115,23 @@ Answer:""")
             try:
                 # Query vector store (with or without image)
                 if uploaded_image:
-                    query_results = self.vector_store.query_with_uploaded_image(
-                        question, 
-                        uploaded_image, 
-                        n_results=Config.TOP_K
-                    )
+                    # For uploaded images, still get document context but don't fail if empty
+                    try:
+                        query_results = self.vector_store.query_with_uploaded_image(
+                            question, 
+                            uploaded_image, 
+                            n_results=Config.TOP_K
+                        )
+                    except:
+                        # Fallback to text-only query
+                        query_results = self.vector_store.query(question, n_results=Config.TOP_K)
                 else:
                     query_results = self.vector_store.query(question, n_results=Config.TOP_K)
                 
                 # Format context
                 context = self._format_context(query_results)
                 
-                if not context.strip():
-                    return "I don't have enough information in my knowledge base to answer this question. Please make sure documents are properly ingested."
-                
-                # Choose appropriate prompt and create chain
+                # For uploaded images, proceed even with minimal context
                 if uploaded_image and image_description:
                     chain = (
                         {
@@ -140,6 +144,10 @@ Answer:""")
                         | StrOutputParser()
                     )
                 else:
+                    # Only fail if no context for text-only queries
+                    if not context.strip() or context == "No specific document context available.":
+                        return "I don't have enough information in my knowledge base to answer this question. Please make sure documents are properly ingested."
+                    
                     chain = (
                         {
                             "context": lambda x: context,
