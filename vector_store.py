@@ -11,7 +11,7 @@ class VectorStore:
     """Manage ChromaDB vector store for text and image embeddings using CLIP"""
     
     def __init__(self):
-        print("📄 Loading CLIP embedding model...")
+        print("📄 Loading embedding model...")
         self.embedding_model = SentenceTransformer(Config.EMBEDDING_MODEL)
         print("✅ CLIP model loaded successfully")
         
