@@ -64,8 +64,8 @@ class Config:
     CHUNK_OVERLAP = 200
     
     # Model Configuration
-    # CLIP for embeddings (local, no API limits!)
-    CLIP_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # Fast and efficient
+    # embeddings (local, no API limits!)
+    EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # Fast and efficient
     
     # Gemini only for vision understanding and LLM
     LLM_MODEL = "gemini-2.5-flash"  # Fast and efficient
