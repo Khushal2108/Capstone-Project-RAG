@@ -96,6 +96,37 @@ if 'initialized' not in st.session_state:
     st.session_state.processing_stats = None
     st.session_state.uploaded_image = None
     st.session_state.image_processor = None
+    st.session_state.auto_check_done = False
+
+def check_existing_database():
+    """Check if database already has data"""
+    try:
+        from chromadb import PersistentClient
+        from chromadb.config import Settings
+        
+        chroma_path = Path(Config.CHROMA_DB_DIR)
+        if not chroma_path.exists():
+            return False
+        
+        client = PersistentClient(
+            path=Config.CHROMA_DB_DIR,
+            settings=Settings(anonymized_telemetry=False)
+        )
+        
+        try:
+            text_collection = client.get_collection(Config.TEXT_COLLECTION)
+            text_count = text_collection.count()
+            
+            if text_count > 0:
+                print(f"✅ Found existing database with {text_count} text chunks")
+                return True
+        except:
+            pass
+        
+        return False
+    except Exception as e:
+        print(f"⚠️ Error checking database: {str(e)}")
+        return False
 
 def initialize_system():
     """Initialize the RAG system"""
@@ -118,6 +149,15 @@ def initialize_system():
             st.session_state.workflow.set_image_processor(st.session_state.image_processor)
             
             st.session_state.initialized = True
+            
+            # Auto-check if database has data
+            if not st.session_state.auto_check_done:
+                if check_existing_database():
+                    st.session_state.ingestion_complete = True
+                    stats = st.session_state.vector_store.get_statistics()
+                    st.session_state.processing_stats = stats
+                    st.success(f"✅ Found existing data: {stats['total']} embeddings loaded!")
+                st.session_state.auto_check_done = True
             
         return True
     except Exception as e:
@@ -314,34 +354,31 @@ def main():
             st.markdown("""
             ### Quick Start Guide
             
-            1. **Initialize System** 
-               - Click the 'Initialize System' button above
+            1. **Run Ingestion First** (One-time)
+```bash
+               python ingest_documents.py
+```
             
-            2. **Add Documents** 
-               - Place PDF, DOC, or DOCX files in the `data/` folder
+            2. **Start Streamlit**
+```bash
+               streamlit run app.py
+```
+               System auto-loads existing data!
             
-            3. **Ingest Documents** 
-               - Click 'Ingest Documents' to process files
-               - Extracts text, images, charts, and tables
-            
-            4. **Ask Questions** 
+            3. **Ask Questions**
                - Text-only or with uploaded images
             
             ### 🆕 Multimodal Features
             - ✅ Upload images and ask about them
-            - ✅ System relates images to document content
-            - ✅ Compare uploaded images with document visuals
+            - ✅ System analyzes images with AI vision
+            - ✅ Works even if image not in documents
             - ✅ Extract images from DOCX files
             
             ### Example Questions
-            **Text Only:**
-            - "Summarize the main points"
-            - "What does page 5 discuss?"
-            
             **With Uploaded Image:**
             - "What does this image show?"
-            - "Is this similar to any charts in the documents?"
-            - "Analyze this diagram in context of my docs"
+            - "Explain this diagram"
+            - "Is this similar to anything in my docs?"
             """)
         
         # About section
@@ -349,14 +386,12 @@ def main():
             st.markdown("""
             **Byte Size RAG Chatbot**
             
-            A multimodal Retrieval-Augmented Generation system:
-            - 🖼️ **Image Upload Support**: Ask about uploaded images
-            - 🔍 **Visual Search**: CLIP embeddings for image-text matching
-            - 📄 **DOCX Image Extraction**: Now extracts images from Word docs
-            - 🤖 **Context-Aware**: Relates images to document content
-            - 💾 **ChromaDB**: Persistent vector storage
+            - 🖼️ **Multimodal**: Text + Image understanding
+            - 🔄 **LangGraph**: Workflow orchestration
+            - 🚀 **Auto-Load**: Pre-ingested data loads automatically
+            - 💾 **Persistent**: ChromaDB storage
             
-            Built with ❤️ using LangChain, CLIP & Streamlit
+            Built with ❤️ using LangChain & Streamlit
             """)
     
     # Main chat area
@@ -365,6 +400,8 @@ def main():
         <div class="info-box">
             <h3>👈 Welcome to Byte Size RAG Chatbot!</h3>
             <p>Please initialize the system using the sidebar to get started.</p>
+            <p><strong>Tip:</strong> If you've already run <code>python ingest_documents.py</code>, 
+            your data will load automatically!</p>
         </div>
         """, unsafe_allow_html=True)
         return
@@ -372,13 +409,17 @@ def main():
     if not st.session_state.ingestion_complete:
         st.markdown("""
         <div class="warning-box">
-            <h3>⚠️ No Documents Ingested</h3>
-            <p>Please follow these steps:</p>
+            <h3>⚠️ No Documents Found</h3>
+            <p><strong>Option 1: Quick Ingestion (Recommended)</strong></p>
             <ol>
                 <li>Add PDF, DOC, or DOCX files to the <code>data/</code> folder</li>
-                <li>Click 'Ingest Documents' in the sidebar</li>
-                <li>Wait for processing to complete</li>
-                <li>Start chatting!</li>
+                <li>Run: <code>python ingest_documents.py</code></li>
+                <li>Refresh this page - data will auto-load!</li>
+            </ol>
+            <p><strong>Option 2: In-App Ingestion</strong></p>
+            <ol>
+                <li>Add documents to <code>data/</code> folder</li>
+                <li>Click 'Ingest Documents' in sidebar</li>
             </ol>
         </div>
         """, unsafe_allow_html=True)
@@ -393,12 +434,14 @@ def main():
     # Image upload section
     with st.expander("🖼️ Upload Image (Optional)", expanded=False):
         st.markdown("""
-        **Upload an image to ask questions about it** in the context of your documents.
+        **Upload any image** to analyze it with AI vision!
+        
+        ✨ **New**: Works even if the image is NOT in your documents!
         
         Examples:
-        - Upload a chart and ask "What does this show?"
-        - Upload a diagram and ask "Is this similar to any in my documents?"
-        - Upload a screenshot and ask "Explain this in context of my docs"
+        - Upload a chart: "What does this show?"
+        - Upload a diagram: "Explain this"
+        - Upload anything: "Analyze this image"
         """)
         
         uploaded_file = st.file_uploader(
@@ -416,7 +459,7 @@ def main():
             st.session_state.uploaded_image = None
     
     # Chat input
-    user_input = st.chat_input("Ask me anything about your documents...")
+    user_input = st.chat_input("Ask me anything about your documents or uploaded images...")
     
     if user_input:
         # Add user message to history
@@ -439,14 +482,18 @@ def main():
         """, unsafe_allow_html=True)
         
         # Generate response
-        with st.spinner("🤔 Thinking..."):
+        with st.spinner("🤔 Analyzing..."):
             try:
-                # Get document context for image analysis
+                # Get document context
                 doc_context = ""
                 if st.session_state.uploaded_image:
-                    # Get some context from vector store
-                    query_results = st.session_state.vector_store.query(user_input, n_results=3)
-                    doc_context = st.session_state.rag_chain._format_context(query_results)
+                    # Get context even if minimal
+                    try:
+                        query_results = st.session_state.vector_store.query(user_input, n_results=3)
+                        doc_context = st.session_state.rag_chain._format_context(query_results)
+                    except Exception as e:
+                        print(f"⚠️ Context retrieval warning: {str(e)}")
+                        doc_context = "General knowledge base"
                 
                 # Use workflow with optional image
                 response = st.session_state.workflow.run(
