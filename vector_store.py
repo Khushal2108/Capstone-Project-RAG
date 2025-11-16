@@ -33,7 +33,7 @@ class VectorStore:
         print("✅ ChromaDB initialized")
     
     def _generate_embedding(self, text: str) -> Optional[List[float]]:
-        """Generate embedding using CLIP (local, no API limits!)"""
+        """Generate embedding  (local, no API limits!)"""
         try:
             embedding = self.embedding_model.encode(text, convert_to_numpy=True)
             return embedding.tolist()
@@ -42,7 +42,7 @@ class VectorStore:
             return None
     
     def _generate_image_embedding(self, image: Image.Image) -> Optional[List[float]]:
-        """Generate embedding directly from image using CLIP"""
+        """Generate embedding"""
         try:
             # CLIP can encode images directly
             embedding = self.embedding_model.encode(image, convert_to_numpy=True)
